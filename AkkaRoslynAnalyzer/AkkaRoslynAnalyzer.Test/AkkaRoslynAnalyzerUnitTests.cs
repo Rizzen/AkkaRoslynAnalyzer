@@ -1,19 +1,17 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.Diagnostics;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using TestHelper;
-using AkkaRoslynAnalyzer;
+using Xunit;
 
 namespace AkkaRoslynAnalyzer.Test
 {
-    [TestClass]
+    
     public class UnitTest : CodeFixVerifier
     {
-
         //No diagnostics expected to show up
-        [TestMethod]
+        [Fact]
         public void TestMethod1()
         {
             var test = @"";
@@ -22,7 +20,7 @@ namespace AkkaRoslynAnalyzer.Test
         }
 
         //Diagnostic and CodeFix both triggered and checked for
-        [TestMethod]
+        [Fact]
         public void TestMethod2()
         {
             var test = @"
