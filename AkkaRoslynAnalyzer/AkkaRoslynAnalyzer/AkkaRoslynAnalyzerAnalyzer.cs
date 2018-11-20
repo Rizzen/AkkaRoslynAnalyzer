@@ -39,14 +39,15 @@ namespace AkkaRoslynAnalyzer
                 && invocationExpressionSyntax.Expression is MemberAccessExpressionSyntax accessExpressionSyntax
                 && accessExpressionSyntax.Name is GenericNameSyntax genericNameSyntax)
             {
-                // TODO without boxing
                 var argList = GetArgumentList(invocationExpressionSyntax, analysisContext.SemanticModel);
                 
                 // Props has only one generic parameter
                 var argument = genericNameSyntax.TypeArgumentList.Arguments.First();
 
-                var constructors = GetConstructors(argument, analysisContext.SemanticModel).First();
-                var b = constructors.EqualToArgList(argList);
+                var constructors = GetConstructors(argument, analysisContext.SemanticModel);
+                
+                if (!constructors.Any(x => x.EqualToArgList(argList)))
+                    analysisContext.ReportDiagnostic(Diagnostic.Create(Rule, expressionSyntax.GetLocation()));
             }
         }
 
