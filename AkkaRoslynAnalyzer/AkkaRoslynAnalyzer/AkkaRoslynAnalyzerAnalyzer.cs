@@ -12,6 +12,9 @@ namespace AkkaRoslynAnalyzer
     public class AkkaRoslynAnalyzerAnalyzer : DiagnosticAnalyzer
     {
         public const string DiagnosticId = "AkkaRoslynAnalyzer";
+        
+        private const string PropsClassName = "Props";
+        private const string CreateFunctionName = "Create";
 
         private static readonly LocalizableString Title = 
             new LocalizableResourceString(nameof(Resources.AnalyzerTitle), Resources.ResourceManager, typeof(Resources));
@@ -33,24 +36,60 @@ namespace AkkaRoslynAnalyzer
 
         private void Action(SyntaxNodeAnalysisContext analysisContext)
         {
-            var expressionSyntax = analysisContext.Node as InvocationExpressionSyntax;
-            
-            if (expressionSyntax is InvocationExpressionSyntax invocationExpressionSyntax 
-                && invocationExpressionSyntax.Expression is MemberAccessExpressionSyntax accessExpressionSyntax
-                && accessExpressionSyntax.Name is GenericNameSyntax genericNameSyntax)
-            {
-                var argList = GetArgumentList(invocationExpressionSyntax, analysisContext.SemanticModel);
-                
-                // Props has only one generic parameter
-                var argument = genericNameSyntax.TypeArgumentList.Arguments.First();
+            if (!analysisContext.Node.GetFirstToken().Text.Equals(PropsClassName)) return;
 
-                var constructors = GetConstructors(argument, analysisContext.SemanticModel);
-                
-                if (!constructors.Any(x => x.EqualToArgList(argList)))
-                    analysisContext.ReportDiagnostic(Diagnostic.Create(Rule, expressionSyntax.GetLocation()));
-            }
+            if (!(analysisContext.Node is InvocationExpressionSyntax expressionSyntax)) return;
+
+            var nodes = expressionSyntax.DescendantNodes().ToList();
+            
+            var identifiers = nodes.OfType<IdentifierNameSyntax>()
+                                   .ToList();
+            
+            // check whether generic function call or not
+            var result = identifiers[1].Identifier.Text.Equals(CreateFunctionName)
+                         ? HandleNonGenericFunctionInvoke(expressionSyntax, nodes, analysisContext.SemanticModel)
+                         : HandleGenericFunctionInvoke(expressionSyntax, nodes, analysisContext.SemanticModel);
+            
+            analysisContext.ReportDiagnostic(result);
         }
 
+        private Diagnostic HandleGenericFunctionInvoke(InvocationExpressionSyntax expressionSyntax,
+                                                       List<SyntaxNode> nodes,
+                                                       SemanticModel semanticModel)
+        {
+            var argList = GetArgumentList(expressionSyntax, semanticModel);
+            
+            var actorType = nodes.OfType<GenericNameSyntax>()
+                                 .FirstOrDefault()
+                                 ?.TypeArgumentList.Arguments
+                                 .FirstOrDefault();
+            
+            var constructors = GetConstructors(actorType, semanticModel);
+            
+            return constructors.Any(x => x.EqualToArgList(argList))
+                   ? null 
+                   : Diagnostic.Create(Rule, expressionSyntax.GetLocation());
+        }
+        
+        private Diagnostic HandleNonGenericFunctionInvoke(InvocationExpressionSyntax expressionSyntax, 
+                                                   List<SyntaxNode> nodes,
+                                                   SemanticModel semanticModel)
+        {
+            // TODO
+            var argList = GetArgumentList(expressionSyntax, semanticModel).Skip(1).ToArray();
+            
+            //nodes.OfType<IdentifierNameSyntax>().Skip(2).FirstOrDefault();
+            var genericTypeSyntax = nodes.OfType<IdentifierNameSyntax>()
+                                         .Skip(2)
+                                         .FirstOrDefault();
+            
+            var constructors = GetConstructors(genericTypeSyntax, semanticModel);
+            
+            return constructors.Any(x => x.EqualToArgList(argList))
+                   ? null 
+                   : Diagnostic.Create(Rule, expressionSyntax.GetLocation());
+        }
+        
         private ITypeSymbol[] GetArgumentList(InvocationExpressionSyntax invocationExpression, SemanticModel model)
             => invocationExpression.ArgumentList.Arguments
                 .Select(syntax => model.GetTypeInfo(syntax.Expression).Type)
