@@ -53,6 +53,7 @@ namespace AkkaRoslynAnalyzer
             analysisContext.ReportDiagnostic(result);
         }
 
+        // var pr = Props.Create<MyActorWithParam>();
         private Diagnostic HandleGenericFunctionInvoke(InvocationExpressionSyntax expressionSyntax,
                                                        List<SyntaxNode> nodes,
                                                        SemanticModel semanticModel)
@@ -64,26 +65,28 @@ namespace AkkaRoslynAnalyzer
                                  ?.TypeArgumentList.Arguments
                                  .FirstOrDefault();
             
-            var constructors = GetConstructors(actorType, semanticModel);
+            var typeInfo = semanticModel.GetTypeInfo(actorType);
+            if (typeInfo.Type.TypeKind == TypeKind.TypeParameter) return null;
+            
+            var constructors = GetConstructors(typeInfo);
             
             return constructors.Any(x => x.EqualToArgList(argList))
-                   ? null 
+                   ? null
                    : Diagnostic.Create(Rule, expressionSyntax.GetLocation());
         }
         
+        // Props.Create(typeof(MyActorWithParam), 1, typeof(MyActorWithParam));
         private Diagnostic HandleNonGenericFunctionInvoke(InvocationExpressionSyntax expressionSyntax, 
-                                                   List<SyntaxNode> nodes,
-                                                   SemanticModel semanticModel)
+                                                          List<SyntaxNode> nodes,
+                                                          SemanticModel semanticModel)
         {
-            // TODO
             var argList = GetArgumentList(expressionSyntax, semanticModel).Skip(1).ToArray();
             
-            //nodes.OfType<IdentifierNameSyntax>().Skip(2).FirstOrDefault();
-            var genericTypeSyntax = nodes.OfType<IdentifierNameSyntax>()
-                                         .Skip(2)
-                                         .FirstOrDefault();
+            var actorType = nodes.OfType<IdentifierNameSyntax>()
+                                 .Skip(2)
+                                 .FirstOrDefault();
             
-            var constructors = GetConstructors(genericTypeSyntax, semanticModel);
+            var constructors = GetConstructors(semanticModel.GetTypeInfo(actorType));
             
             return constructors.Any(x => x.EqualToArgList(argList))
                    ? null 
@@ -96,12 +99,12 @@ namespace AkkaRoslynAnalyzer
                 .Where(x => x != null)
                 .ToArray();
 
-        private List<ConstructorInfo> GetConstructors(ExpressionSyntax genericArgument, SemanticModel model)
+        private List<ConstructorInfo> GetConstructors(TypeInfo typeInfo)
         {
             var result = new List<ConstructorInfo>();
-            if (model.GetTypeInfo(genericArgument).Type is INamedTypeSymbol typeInfo)
+            if (typeInfo.Type is INamedTypeSymbol type)
             {
-                var ctors = typeInfo.Constructors;
+                var ctors = type.Constructors;
                 foreach (var methodSymbol in ctors)
                 {
                     var @params = methodSymbol.Parameters.Select(symbol => symbol.Type).ToList();
