@@ -28,11 +28,8 @@ namespace AkkaRoslynAnalyzer
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
 
-        public override void Initialize(AnalysisContext context)
-        {
-            // See https://github.com/dotnet/roslyn/blob/master/docs/analyzers/Analyzer%20Actions%20Semantics.md for more information
-            context.RegisterSyntaxNodeAction(Action, SyntaxKind.InvocationExpression);
-        }
+        public override void Initialize(AnalysisContext context) 
+            => context.RegisterSyntaxNodeAction(Action, SyntaxKind.InvocationExpression);
 
         private void Action(SyntaxNodeAnalysisContext analysisContext)
         {
@@ -46,6 +43,7 @@ namespace AkkaRoslynAnalyzer
                                    .ToList();
             
             // check whether generic function call or not
+            // in case of invocation like Props.Create<MyActor>() second IdentifierNameSyntax will be Create
             var result = identifiers[1].Identifier.Text.Equals(CreateFunctionName)
                          ? HandleNonGenericFunctionInvoke(expressionSyntax, nodes, analysisContext.SemanticModel)
                          : HandleGenericFunctionInvoke(expressionSyntax, nodes, analysisContext.SemanticModel);
@@ -81,6 +79,13 @@ namespace AkkaRoslynAnalyzer
                                                           SemanticModel semanticModel)
         {
             var argList = GetArgumentList(expressionSyntax, semanticModel).Skip(1).ToArray();
+
+            // we cant detect the Actor type if not typeof used
+            if (!(nodes.OfType<ArgumentSyntax>()
+                       .FirstOrDefault()
+                       ?.DescendantNodes()
+                       .First() is TypeOfExpressionSyntax))
+                return null;
             
             var actorType = nodes.OfType<IdentifierNameSyntax>()
                                  .Skip(2)
@@ -89,7 +94,7 @@ namespace AkkaRoslynAnalyzer
             var constructors = GetConstructors(semanticModel.GetTypeInfo(actorType));
             
             return constructors.Any(x => x.EqualToArgList(argList))
-                   ? null 
+                   ? null
                    : Diagnostic.Create(Rule, expressionSyntax.GetLocation());
         }
         
