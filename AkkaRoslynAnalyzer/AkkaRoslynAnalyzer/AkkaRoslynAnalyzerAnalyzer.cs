@@ -47,8 +47,8 @@ namespace AkkaRoslynAnalyzer
             var result = identifiers[1].Identifier.Text.Equals(CreateFunctionName)
                          ? HandleNonGenericFunctionInvoke(expressionSyntax, nodes, analysisContext.SemanticModel)
                          : HandleGenericFunctionInvoke(expressionSyntax, nodes, analysisContext.SemanticModel);
-            
-            analysisContext.ReportDiagnostic(result);
+            if (result != null)
+                analysisContext.ReportDiagnostic(result);
         }
 
         // var pr = Props.Create<MyActorWithParam>();
@@ -64,6 +64,8 @@ namespace AkkaRoslynAnalyzer
                                  .FirstOrDefault();
             
             var typeInfo = semanticModel.GetTypeInfo(actorType);
+            
+            // If current expression - open generic expression - we can't handle it
             if (typeInfo.Type.TypeKind == TypeKind.TypeParameter) return null;
             
             var constructors = GetConstructors(typeInfo);
@@ -73,6 +75,7 @@ namespace AkkaRoslynAnalyzer
                    : Diagnostic.Create(Rule, expressionSyntax.GetLocation());
         }
         
+        // Handle
         // Props.Create(typeof(MyActorWithParam), 1, typeof(MyActorWithParam));
         private Diagnostic HandleNonGenericFunctionInvoke(InvocationExpressionSyntax expressionSyntax, 
                                                           List<SyntaxNode> nodes,
